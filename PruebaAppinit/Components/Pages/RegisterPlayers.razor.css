@@ -1,0 +1,42 @@
+﻿.container {
+    width: 450px;
+    margin: 20px auto;
+    text-align: left;
+    font-family: Arial, sans-serif;
+}
+
+.title {
+    text-align: center;
+    margin-top: 20px;
+}
+
+.subtitle {
+    margin-bottom: 20px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+label {
+    display: block;
+    font-size: 14px;
+    margin-bottom: 5px;
+}
+
+.input-text {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid #aaa;
+    border-radius: 4px;
+}
+
+.btn {
+    display: block;
+    margin: 20px auto;
+    padding: 8px 18px;
+    border: 1px solid #555;
+    background: #e6e6e6;
+    cursor: pointer;
+    border-radius: 4px;
+}

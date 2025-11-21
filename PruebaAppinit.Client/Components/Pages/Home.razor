@@ -1,0 +1,62 @@
+﻿@page "/"
+@inject HttpClient Http
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+<PageTitle>Piedra, Papel o Tijera</PageTitle>
+
+<h1>Piedra, Papel o Tijera</h1>
+<br />
+<br />
+<p role="status">Por favor registre los jugadores</p>
+
+
+<div class="row">
+    <div class="col-md-6">
+        <div>
+            <label>Jugador 1</label>
+            <input @bind="player1" placeholder="Nombre Completo" class=""/>
+        </div>
+
+        <br />
+        <div>
+            <label>Jugador 2</label>
+            <input @bind="player2" placeholder="Nombre Completo" />
+        </div>
+    </div>
+</div>
+
+<br />
+<button class="btn btn-primary" @onclick="StartGame">Iniciar Batalla</button>
+
+@code {
+    private int currentCount = 0;
+
+    string player1 = "";
+    string player2 = "";
+    async Task StartGame()
+    {
+        try
+        {
+            var req = new { Player1Name = player1, Player2Name = player2 };
+            var res = await Http.PostAsJsonAsync("https://localhost:7073/api/games/start", req);
+            if (res.IsSuccessStatusCode)
+            {
+                var data = await res.Content.ReadFromJsonAsync<StartGameResponse>();
+                NavigationManager.NavigateTo($"/game/{data!.GameId}");
+            }
+        }
+        catch (Exception ex)
+        {
+            NavigationManager.NavigateTo($"/error/{ex.Message}");
+        }
+        
+    }
+    class StartGameResponse { 
+        public System.Guid GameId { get; set; } 
+        public string Player1Name { get; set; } 
+        public string Player2Name { get; set; } 
+    }
+
+    
+}

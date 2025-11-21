@@ -1,0 +1,250 @@
+﻿@page "/game/{GameId:guid}"
+@inject HttpClient Http
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+<PageTitle>Piedra, Papel o Tijera</PageTitle>
+
+<div class="container">
+    <div class="row">
+        <div class="col-md-6">
+            @if (CurrentStep == Step.SelectP1)
+            {
+                <header>
+                    <h2>Ronda @RoundNumber</h2>
+                    <br />
+                </header>
+                <p>Jugador: @Player1</p>
+                <br />
+                <label>Seleccione movimiento</label>
+                <select @bind="SelectedP1" class="form-control">
+                    <option value="Rock">Piedra</option>
+                    <option value="Paper">Papel</option>
+                    <option value="Scissors">Tijera</option>
+                </select>
+                <br />
+                <button class="btn btn-success" @onclick="ConfirmP1">Ok</button>
+            }
+            else if (CurrentStep == Step.SelectP2)
+            {
+                <header>
+                    <h2>Ronda @RoundNumber</h2>
+                    <br />
+                </header>
+                <p>Jugador: @Player2</p>
+                <label>Seleccione movimiento</label>
+                <select @bind="SelectedP2" class="form-control">
+                    <option value="Rock">Piedra</option>
+                    <option value="Paper">Papel</option>
+                    <option value="Scissors">Tijera</option>
+                </select>
+                <br />
+                <div class="buttons">
+                    <button class="btn btn-success" @onclick="ConfirmP2" disabled="@IsSending">Ok</button>
+                </div>
+            }
+            else if (CurrentStep == Step.ShowResult)
+            {
+                if (Status.ScoreP1 > 2 || Status.ScoreP2 > 2)
+                {
+                    NavigationManager.NavigateTo($"/ganador/{GameId}");
+                }
+                <header>
+                    <h2>Ronda @RoundLast </h2>
+                    <br />
+                </header>
+                <h3>Resultado Ronda</h3>
+                <br />
+                @if (LastRound != null)
+                {
+                    <p><strong>Ganador de la ronda:</strong> @FormatOutcome(LastRound.Outcome)</p>
+                }
+                <br />
+                <div class="buttons">
+                    <button class="btn btn-primary" @onclick="NextRound">Siguiente Ronda</button>
+                </div>
+            }
+
+        </div>
+
+        <div class="col-md-6">
+            @if (RoundNumber > 1)
+            {
+                <section class="scorebox">
+                    <h2>Resultado Parcial</h2>
+                    @if (Status is null)
+                    {
+                        <p>Cargando...</p>
+                    }
+                    else
+                    {
+                        <table class="table" align="left">
+                            <thead><tr><th>Ronda</th><th>Ganador</th></tr></thead>
+                            <tbody>
+                                @for (int i = 0; i < Status.Rounds.Count; i++)
+                                {
+                                    var r = Status.Rounds[i];
+                                    <tr>
+                                        <td>@(i + 1)</td>
+                                        <td>@FormatOutcome(r.Outcome)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </section>
+            }
+
+        </div>
+    </div>     
+
+    @if (!string.IsNullOrEmpty(Error))
+    {
+        <div class="error">@Error</div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid GameId { get; set; }
+
+    enum Step { SelectP1, SelectP2, ShowResult }
+    Step CurrentStep { get; set; } = Step.SelectP1;
+
+    // Moves selected
+    string SelectedP1 { get; set; } = "Rock";
+    string SelectedP2 { get; set; } = "Rock";
+
+    bool IsSending { get; set; } = false;
+    string? Error { get; set; }
+
+    GameStatusResponse? Status { get; set; }
+    PlayRoundResponse? LastRound { get; set; }
+
+    int RoundNumber => (Status?.Rounds.Count ?? 0) + 1;
+    int RoundLast => (Status?.Rounds.Count ?? 0);
+    string Player1 => (Status?.Player1Name ?? "");
+    string Player2 => (Status?.Player2Name ?? "");
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStatus();
+    }
+
+    async Task LoadStatus()
+    {
+        try
+        {
+            Status = await Http.GetFromJsonAsync<GameStatusResponse>($"https://localhost:7073/api/games/{GameId}");
+            Error = null;
+        }
+        catch (Exception ex)
+        {
+            NavigationManager.NavigateTo($"/error/{ex.Message}");
+        }
+    }
+
+    void ConfirmP1()
+    {
+        // lock P1 selection and go to P2
+        CurrentStep = Step.SelectP2;
+        Error = null;
+    }
+
+    void BackToP1()
+    {
+        CurrentStep = Step.SelectP1;
+    }
+
+    async Task ConfirmP2()
+    {
+        // Send both moves to API
+        IsSending = true;
+        Error = null;
+        try
+        {
+            var payload = new PlayRoundRequest { GameId = GameId, Player = "both", Move = $"{SelectedP1}|{SelectedP2}" };
+            var res = await Http.PostAsJsonAsync("https://localhost:7073/api/games/play", payload);
+            if (res.IsSuccessStatusCode)
+            {
+                LastRound = await res.Content.ReadFromJsonAsync<PlayRoundResponse>();
+                // reload status (scores and rounds)
+                await LoadStatus();
+                CurrentStep = Step.ShowResult;
+            }
+            else
+            {
+                var txt = await res.Content.ReadAsStringAsync();
+                Error = $"Error del servidor: {res.StatusCode}. {txt}";
+            }
+        }
+        catch (Exception ex)
+        {
+            NavigationManager.NavigateTo($"/error/{ex.Message}");
+        }
+        finally
+        {
+            IsSending = false;
+        }
+    }
+
+    void NextRound()
+    {
+        // reset selections and go to P1
+        SelectedP1 = "Rock";
+        SelectedP2 = "Rock";
+        LastRound = null;
+        CurrentStep = Step.SelectP1;
+    }
+
+    void GoToSummary()
+    {
+        NavigationManager.NavigateTo($"/game/{GameId}");
+    }
+
+    string FormatOutcome(string outcome)
+    {
+        return outcome switch
+        {
+            "Tie" => "Empate",
+            "Player1Wins" => Player1,
+            "Player2Wins" => Player2,
+            _ => outcome
+        };
+    }
+
+    // Local DTOs (mirror server DTOs)
+    class PlayRoundRequest
+    {
+        public Guid GameId { get; set; }
+        public string Player { get; set; } = "";
+        public string Move { get; set; } = "";
+    }
+
+    class PlayRoundResponse
+    {
+        public Guid GameId { get; set; }
+        public string Player1Move { get; set; } = "";
+        public string Player2Move { get; set; } = "";
+        public string Outcome { get; set; } = "";
+        public int ScoreP1 { get; set; }
+        public int ScoreP2 { get; set; }
+    }
+
+    class GameStatusResponse
+    {
+        public Guid GameId { get; set; }
+        public string Player1Name { get; set; } = "";
+        public string Player2Name { get; set; } = "";
+        public int ScoreP1 { get; set; }
+        public int ScoreP2 { get; set; }
+        public List<RoundDTO> Rounds { get; set; } = new();
+    }
+
+    class RoundDTO
+    {
+        public string P1 { get; set; } = "";
+        public string P2 { get; set; } = "";
+        public string Outcome { get; set; } = "";
+    }
+}
+

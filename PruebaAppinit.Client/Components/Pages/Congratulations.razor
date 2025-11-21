@@ -1,0 +1,84 @@
+﻿@page "/ganador/{GameId:guid}"
+@inject HttpClient Http
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+<PageTitle>Piedra, Papel o Tijera</PageTitle>
+
+<h2>Tenemos un ganador</h2>
+<br />
+<br />
+
+@if (Game == null)
+{
+    <p>Cargando...</p>
+}
+else
+{
+    <div class="winner-container">
+
+        <p>@WinnerName es el nuevo campeón</p>
+        <br />
+        <br />
+        <br />
+
+        <button class="btn btn-primary" @onclick="StartNewGame">
+            Revancha
+        </button>
+
+        <button class="btn btn-primary" @onclick="VolverInicio">
+            Nuevo Juego
+        </button>
+        
+    </div>
+}
+
+@code {
+    [Parameter] public Guid GameId { get; set; }
+
+    public GameDto? Game { get; set; }
+
+    public string WinnerName { get; set; } = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Game = await Http.GetFromJsonAsync<GameDto>($"https://localhost:7073/api/games/{GameId}");
+
+        WinnerName = Game!.ScoreP1 > Game.ScoreP2
+            ? Game.Player1Name
+            : Game.Player2Name;
+    }
+
+    void VolverInicio()
+    {
+        NavigationManager.NavigateTo("/");
+    }
+
+    async Task StartNewGame()
+    {
+        var req = new { Player1Name = Game.Player1Name, Player2Name = Game.Player2Name };
+        var res = await Http.PostAsJsonAsync("https://localhost:7073/api/games/start", req);
+        if (res.IsSuccessStatusCode)
+        {
+            var data = await res.Content.ReadFromJsonAsync<StartGameResponse>();
+            NavigationManager.NavigateTo($"/game/{data!.GameId}");
+        }
+    }
+
+    public class GameDto
+    {
+        public Guid Id { get; set; }
+        public string Player1Name { get; set; } = "";
+        public string Player2Name { get; set; } = "";
+        public int ScoreP1 { get; set; }
+        public int ScoreP2 { get; set; }
+    }
+
+    public class StartGameResponse 
+    { 
+        public System.Guid GameId { get; set; } 
+        public string Player1Name { get; set; } 
+        public string Player2Name { get; set; } 
+    }
+
+}
+
